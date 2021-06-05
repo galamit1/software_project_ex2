@@ -2,11 +2,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-
+#define PY_SSIZE_T_CLEAN
 #include <Python.h>
-
-
-
 
 #define EPSILON 0.001
 
@@ -21,12 +18,13 @@ typedef struct Cluster {
 
 
 /*** Function Declaration ***/
-
+static PyObject* c_kmeans(PyObject *self, PyObject *args);
 int get_num_coordinates(char* sinlge_line);
 double** init_points (int num_points, int num_coordinates);
 double* convert_line_to_point (double* point, char* line);
 Cluster* make_cluster (const double* point, const int num_coordinates, const int index);
-Cluster** init_k_clusters (double** points, int k, int num_coordinates);
+/*Cluster** init_k_clusters (double** points, int k, int num_coordinates);*/
+Cluster** python_init_k_clusters (double **points, int k, int num_coordinates, long *init_indexes_array );
 void add_point_to_cluster (Cluster* cluster, const double* point, int num_coordinates);
 void find_minimum_distance (Cluster** clusters, double* point, int k, int num_coordinates);
 double update_cluster_centroids_and_sum (Cluster* cluster, int num_coordinates);
@@ -35,118 +33,79 @@ void free_clusters_memory (Cluster** clusters, int k);
 void free_points_memory (double** points, int num_points);
 double get_distance (Cluster* cluster, const double* point, int num_coordinates);
 
-static Pyobject *fit_capi(PyObject *self, PyObject *args) ;
-
-/*******************************/
-/*** Module setup ***/
-/*******************************/
-
-static Pyobject *fit_capi(PyObject *self, PyObject *args) {
-    double centroids, points;
-    int k, max_iter;
-
-    /* Parse arguments */
-    if(!PyArg_ParseTuple(args, "ddii", &centroids, &points, k, max_iter)) {
-        return NULL;
-    }
-    printf("k is %d, max_iter is: %d", k, max_iter);
-}
-
-static PyMethodDef fitMethods [] = {
-        {"fit",
-                (PyCFunction) fit_capi,
-                     METH_VARARGS,
-                        PyDoc_STR("Kmeans function")
-        },
-        {NULL, NULL, 0, NULL}
-};
-
-static struct PyModuleDef moduleDef  = {
-        PyModuleDef_HEAD_INIT,
-        "mykmeanssp",
-        NULL,
-        -1,
-        fitMethods
-};
-
-
-
-
 /*******************************/
 /*** Main Function ***/
 /*******************************/
 
-int main(int argc, char **argv) { 
-    /*argc = number of parameters (including program name), **argv = string array of parameters.*/
-
-    /***Variables declarations***/
+static PyObject* c_kmeans(PyObject *self, PyObject *args) {
+    /*Define variables to receive from user*/
     int k;
     int max_iter;
     int num_points;
     int num_coordinates;
-    char single_line[1000]; /*Rami gave assumption each line's length is <= 1000*/
-    int line_num;
+    PyObject *data_points;
+    PyObject *initial_indexes;
+    PyObject *index_item;
+    Py_ssize_t list_size;
+    Py_ssize_t entry_size;
+    PyObject *point_item;
+    PyObject *coordinate_item;
     double **points;
     double *point;
     Cluster **clusters;
     int did_update;
     int i;
     int j;
+    long *init_indexes_array;
 
-    /***Input validation***/
-    if (argc < 2 || argc > 3) {
-        printf("Invalid input: number of parameters should be 2 or 3.");
+    /*TODO: data_points in Python should be list of lists*/
+
+
+    /* Parse arguments from Python */
+    if((!PyArg_ParseTuple(args, "OOiiii", &data_points, &initial_indexes, &k, &max_iter, &num_points, &num_coordinates)) {
+        return NULL; /*In the CPython API, Null is never a valid value for a PyObject* - so it signals an error*/
     }
 
-    sscanf_s(argv[1], "%d", &k);
-
-    if (argc > 2) { /*max_iter was passed by user*/
-        sscanf_s(argv[2], "%d", &max_iter);
-    }
-    else { /*max_iter not passed by user*/
-        max_iter = 200;
+    /*Verify that data_points & initial_indexes are python lists*/
+    if (!PyList_Check(data_points) || !PyList_Check(initial_indexes)) {
+        return NULL;
     }
 
-    if (k <= 0 || max_iter <= 0) {
-        printf("Invalid input: k and max_iter should both be > 0");
-        exit(0);
-    }
-
-    if (stdin == NULL) {
-        printf ("Couldn't open file");
-        exit(0);
-    }
-
-    /***Get data from file***/
-    fgets(single_line , 1000, stdin);
-    num_coordinates = get_num_coordinates(single_line);
-    num_points = 1; /*Already scanned first line*/
-    while (fgets(single_line, 1000, stdin) != NULL) {
-        num_points++;
-    }
-
-    rewind(stdin); /*Reset pointer to head of file*/
-
-    if (k > num_points) {
-        printf ("Invalid input: more clusters than points");
-        exit(0);
-    }
-
+    /*TODO: include input validation in main Python file*/
+    
+    /*Load points from PyObject into C format of 2D-array points*/
     points = init_points(num_points, num_coordinates);
-    line_num = 0;
-    fgets(single_line, 1000, stdin); /*Rami gave assumption there's at least 1 point*/
 
-    do {
-        convert_line_to_point(points[line_num], single_line);
-        line_num++;
+    list_size = PyList_Size(data_points); /*equivilant to len(_list) in Python*/
+    for (i=0; i<list_size; i++) { /*iterate over points*/
+        point_item = PyList_GetItem(data_points, i);
+        if (!PyList_Check(point_item)) {
+            return NULL;
+        }
+        entry_size = PyList_Size(point_item);
+        for (j=0; j<entry_size; j++) { /*iterate over coordinates of single point*/
+            coordinate_item = PyList_GetItem(point_item, j);
+            if (!PyFloat_Check(coordinate_item) {
+                return NULL;
+            };
+            points[i][j] = PyFloat_AsDouble(coordinate_item);
+        }
     }
-    while (fgets(single_line, 1000, stdin) != NULL);
 
+    /*Load initial indexes from PyObject into C format of array */
+    init_indexes_array = calloc(k, sizeof(long));
+    assert(init_indexes_array != NULL);
 
-    fclose(stdin);
+    for (i=0; i<k; i++) { /*iterate over initial indexes*/
+        index_item = PyList_GetItem(initial_indexes, i);
+        if (!PyLong_Check(index_item)) {
+            return NULL;
+        }
+        init_indexes_array[i] = PyLong_AsLong(index_item);
+    }
 
     /***Execute k-means algorithm***/
-    clusters = init_k_clusters(points, k, num_coordinates);
+    clusters = python_init_k_clusters(points, k, num_coordinates, init_indexes_array);
     did_update = 0;
 
     for (i=0; i<max_iter; i++) {
@@ -162,23 +121,16 @@ int main(int argc, char **argv) {
 
     free_points_memory(points, num_points);
 
-    /***Print results***/
-    for (i=0; i<k; i++) {
-        for (j=0; j<num_coordinates; j++) {
-            printf("%.4f", clusters[i]->curr_centroids[j]);
-            if (j != (num_coordinates-1)) {
-                printf(",");
-            }
-        }
-        printf("\n");
-    }
+    /*TODO: Convert results to Python Object*/
 
     free_clusters_memory(clusters, k);
 
+    /*TODO: return Python Object that holds results*/
 
-    return 0;
-
+    Py_RETURN_NONE; 
 }
+
+
 
 /*******************************/
 /*** Function Implementation ***/
@@ -276,11 +228,12 @@ Cluster* make_cluster (const double* point, const int num_coordinates,const int 
     return cluster;
 }
 
+/*To Delete:
 Cluster** init_k_clusters (double **points, int k, int num_coordinates) {
-    /*
+    
     Recieves pointer to 2D array of points, k and number of coordinates,
     Returns new 2D array of Clusters with sufficient memory, initialized with the first k points.
-    */
+    
     Cluster **clusters;
     int i;
 
@@ -289,6 +242,27 @@ Cluster** init_k_clusters (double **points, int k, int num_coordinates) {
 
     for (i=0; i<k; i++) {
         clusters[i] = make_cluster(points[i], num_coordinates, i);
+    }
+
+    return clusters;
+}
+*/
+
+Cluster** python_init_k_clusters (double **points, int k, int num_coordinates, long *init_indexes_array ) {
+    /*
+    Recieves pointer to 2D array of points, k, number of coordinates and array of initial indexes,
+    Returns new 2D array of Clusters with sufficient memory, initialized with the first k points.
+    */
+    Cluster **clusters;
+    int i;
+    long initial_index;
+
+    clusters = malloc(sizeof(Cluster*) * k);
+    assert (clusters != NULL);
+
+    for (i=0; i<k; i++) {
+        initial_index = init_indexes_array[i];
+        clusters[i] = make_cluster(points[initial_index], num_coordinates, i);
     }
 
     return clusters;
@@ -425,5 +399,34 @@ double get_distance (Cluster* cluster, const double* point, int num_coordinates)
     return distance;
 }
 
+/*******************************/
+/*** Module setup ***/
+/*******************************/
+
+
+
+/*TODO: verift syntax is correct*/
+static PyMethodDef _methods[] = {
+        {"fit",
+                (PyCFunction) c_kmeans,
+                     METH_VARARGS,
+                        PyDoc_STR("Kmeans execution with given initial centroids."),
+        },
+        {NULL, NULL, 0, NULL} /*Sentinel*/
+};
+
+static struct PyModuleDef _moduledef  = {
+        PyModuleDef_HEAD_INIT,
+        "mykmeanssp",
+        NULL,
+        -1,
+        _methods
+};
+
+PyMODINIT_FUNC
+PyInit_mykmeanssp(void)
+{
+    return PyModule_Create(&_moduledef);
+}
 
 
