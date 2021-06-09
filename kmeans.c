@@ -62,7 +62,7 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
 
 
     /* Parse arguments from Python */
-    if((!PyArg_ParseTuple(args, "OOiiii", &data_points, &initial_indexes, &k, &max_iter, &num_points, &num_coordinates)) {
+    if((!PyArg_ParseTuple(args, "OOiiii", &data_points, &initial_indexes, &k, &max_iter, &num_points, &num_coordinates))) {
         return NULL; /*In the CPython API, Null is never a valid value for a PyObject* - so it signals an error*/
     }
 
@@ -85,7 +85,7 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
         entry_size = PyList_Size(point_item);
         for (j=0; j<entry_size; j++) { /*iterate over coordinates of single point*/
             coordinate_item = PyList_GetItem(point_item, j);
-            if (!PyFloat_Check(coordinate_item) {
+            if (!PyFloat_Check(coordinate_item)) {
                 return NULL;
             };
             points[i][j] = PyFloat_AsDouble(coordinate_item);
