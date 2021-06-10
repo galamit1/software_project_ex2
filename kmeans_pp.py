@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import pandasql
 
+POINTS_SEPARATOR = '\n'
+COORDINATES_SEPARATOR = ','
 JOIN_TABLES_QUERY = """select {}
                     from data_1 as a
                     inner join data_2 as b
@@ -19,17 +21,17 @@ def get_points(file_1, file_2):
     return np.array(pandasql.sqldf(JOIN_TABLES_QUERY.format(select_columns), locals()).values)
 
 
-def calc_centroids(points, k):
-    centroids = points[np.random.choice(points.shape[0], 1)]
+def calc_centroids_indexes(points, k):
+    centroids_indexes = np.random.choice(points.shape[0], 1)
     for z in range(1, k):
         distances = np.array([])
         for point in points:
-            distance = min(
-                [np.power(np.subtract(point, centroids[j]), 2).sum() for j in range(0, centroids.shape[0])])
+            distance = min([np.power(np.subtract(point, centroids_indexes[j]), 2).sum() for j in range(0, centroids_indexes.shape[0])])
             distances = np.append(distances, distance)
         probs = np.divide(distances, distances.sum())
-        centroids = np.append(centroids, points[np.random.choice(points.shape[0], 1, p=probs)], axis=0)
-    return centroids
+        centroids_indexes = np.append(centroids_indexes, np.random.choice(points.shape[0], 1, p=probs), axis=0)
+        centroids_indexes.sort()
+    return centroids_indexes
 
 
 def main():
@@ -38,11 +40,16 @@ def main():
     max_iter = int(sys.argv[2])
     file_1 = sys.argv[3]
     file_2 = sys.argv[4]
+
     points = get_points(file_1, file_2)
-    centroids = calc_centroids(points, k)
-    print(centroids)
-    centroids = mykmeanssp.fit(points.tolist(), centroids.tolist(), k, max_iter, len(points), len(points[0]))
-    print(centroids)
+    assert k < points.shape[0]
+    centroids_indexes = calc_centroids_indexes(points, k)
+    print(centroids_indexes)
+
+    centroids = [points[i].tolist() for i in centroids_indexes]
+    centroids_output = np.array(mykmeanssp.fit(points.tolist(), centroids, k, max_iter, len(points), len(points[0])))
+    centroids_output = np.round(centroids_output, decimals=4)
+    print(POINTS_SEPARATOR.join([COORDINATES_SEPARATOR.join([str(c) for c in centroid]) for centroid in centroids_output.tolist()]))
 
 
 if __name__ == '__main__':
