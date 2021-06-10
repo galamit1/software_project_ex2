@@ -14,7 +14,7 @@ JOIN_TABLES_QUERY = """select {}
 def get_points(file_1, file_2):
     data_1 = pd.read_csv(file_1, header=None)
     data_2 = pd.read_csv(file_2, header=None)
-    select_columns = "a.'" + "',a.'".join(map(str, range(1, len(data_1.columns)))) + "'" \
+    select_columns = "a.'" + "',a.'".join(map(str, range(1, len(data_1.columns)))) + "'," \
                      + "b.'" + "',b.'".join(map(str, range(1, len(data_2.columns)))) + "'"
     return np.array(pandasql.sqldf(JOIN_TABLES_QUERY.format(select_columns), locals()).values)
 
@@ -41,7 +41,7 @@ def main():
     points = get_points(file_1, file_2)
     centroids = calc_centroids(points, k)
     print(centroids)
-    centroids = mykmeanssp.fit(points, centroids, k, max_iter, len(points), len(points[0]))
+    centroids = mykmeanssp.fit(points.tolist(), centroids.tolist(), k, max_iter, len(points), len(points[0]))
     print(centroids)
 
 

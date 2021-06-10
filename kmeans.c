@@ -1,9 +1,10 @@
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#define PY_SSIZE_T_CLEAN
-#include <Python.h>
 
 #define EPSILON 0.001
 
@@ -23,7 +24,6 @@ int get_num_coordinates(char* sinlge_line);
 double** init_points (int num_points, int num_coordinates);
 double* convert_line_to_point (double* point, char* line);
 Cluster* make_cluster (const double* point, const int num_coordinates, const int index);
-/*Cluster** init_k_clusters (double** points, int k, int num_coordinates);*/
 Cluster** python_init_k_clusters (double **points, int k, int num_coordinates, long *init_indexes_array );
 void add_point_to_cluster (Cluster* cluster, const double* point, int num_coordinates);
 void find_minimum_distance (Cluster** clusters, double* point, int k, int num_coordinates);
@@ -57,8 +57,11 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
     int i;
     int j;
     long *init_indexes_array;
-
-    /*TODO: data_points in Python should be list of lists*/
+    PyObject *centroids_output_list;
+    Py_ssize_t output_list_len;
+    PyObject *single_centroid_list;
+    Py_ssize_t output_num_coordinates;
+    PyObject *output_coordinate_item;
 
 
     /* Parse arguments from Python */
@@ -121,13 +124,31 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
 
     free_points_memory(points, num_points);
 
-    /*TODO: Convert results to Python Object*/
+    /***Convert results to Python Object***/
+    output_list_len = k;
+    output_num_coordinates = num_coordinates;
+    centroids_output_list = PyList_New(output_list_len); /*Create final centroids list*/
+    if (centroids_output_list == NULL) {
+        return NULL;
+    }
+    for (i=0; i<k; i++) {
+        single_centroid_list = PyList_New(output_num_coordinates); /*Create single centroid list*/
+        if (single_centroid_list == NULL) {
+            return NULL;
+        }
+        for (j=0; j<num_coordinates; j++) {
+            output_coordinate_item = PyFloat_FromDouble(clusters[i]->curr_centroids[j]);
+            if (output_coordinate_item == NULL) {
+                return NULL;
+            }
+            PyList_SET_ITEM(single_centroid_list, j, output_coordinate_item); /*user macro version of PyList_setItem() since there's no previous content*/
+        }
+        PyList_SET_ITEM(centroids_output_list, i, single_centroid_list);
+    }
 
     free_clusters_memory(clusters, k);
 
-    /*TODO: return Python Object that holds results*/
-
-    Py_RETURN_NONE; 
+    return centroids_output_list;
 }
 
 
@@ -227,26 +248,6 @@ Cluster* make_cluster (const double* point, const int num_coordinates,const int 
 
     return cluster;
 }
-
-/*To Delete:
-Cluster** init_k_clusters (double **points, int k, int num_coordinates) {
-    
-    Recieves pointer to 2D array of points, k and number of coordinates,
-    Returns new 2D array of Clusters with sufficient memory, initialized with the first k points.
-    
-    Cluster **clusters;
-    int i;
-
-    clusters = malloc(sizeof(Cluster*) * k);
-    assert (clusters != NULL);
-
-    for (i=0; i<k; i++) {
-        clusters[i] = make_cluster(points[i], num_coordinates, i);
-    }
-
-    return clusters;
-}
-*/
 
 Cluster** python_init_k_clusters (double **points, int k, int num_coordinates, long *init_indexes_array ) {
     /*
@@ -403,8 +404,6 @@ double get_distance (Cluster* cluster, const double* point, int num_coordinates)
 /*** Module setup ***/
 /*******************************/
 
-
-
 /*TODO: verift syntax is correct*/
 static PyMethodDef _methods[] = {
         {"fit",
@@ -426,7 +425,12 @@ static struct PyModuleDef _moduledef  = {
 PyMODINIT_FUNC
 PyInit_mykmeanssp(void)
 {
-    return PyModule_Create(&_moduledef);
+    PyObject *m;
+    m = PyModule_Create(&_moduledef);
+    if (!m) {
+        return NULL;
+    }
+    return m;
 }
 
 

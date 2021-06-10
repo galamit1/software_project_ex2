@@ -1,16 +1,18 @@
 from setuptools import setup, find_packages, Extension
 
 setup(
-    name='ex2',
+    name='kmeans_CPython_API',
     version='0.0.1',
     author='Gal and Ben',
-    description='ex2',
+    description='ex2 - CPython API',
     install_requires=['invoke'],
     packages=find_packages(),
-    license='LICENSE.txt',
+    license='GPL-2',
     ext_modules=[
         Extension(
             'mykmeanssp', ['kmeans.c'],
         ),
     ]
 )
+
+#Todo: make sure that reqiurements works
