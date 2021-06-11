@@ -28,7 +28,7 @@ def calc_centroids_indexes(points, k):
     for z in range(1, k):
         distances = np.array([])
         for point in points:
-            distance = min([np.power(np.subtract(point, centroids_indexes[j]), 2).sum() for j in range(0, centroids_indexes.shape[0])])
+            distance = min([np.power(np.subtract(point, points[j]), 2).sum() for j in centroids_indexes])
             distances = np.append(distances, distance)
         probs = np.divide(distances, distances.sum())
         centroids_indexes = np.append(centroids_indexes, np.random.choice(points.shape[0], 1, p=probs), axis=0)
