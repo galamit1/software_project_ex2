@@ -32,7 +32,6 @@ def calc_centroids_indexes(points, k):
             distances = np.append(distances, distance)
         probs = np.divide(distances, distances.sum())
         centroids_indexes = np.append(centroids_indexes, np.random.choice(points.shape[0], 1, p=probs), axis=0)
-        centroids_indexes.sort()
     return centroids_indexes
 
 
@@ -52,7 +51,7 @@ def main():
     points = get_points(file_1, file_2)
     assert k < points.shape[0]
     centroids_indexes = calc_centroids_indexes(points, k)
-    print(centroids_indexes)
+    print(COORDINATES_SEPARATOR.join([str(c) for c in centroids_indexes]))
 
     centroids = [points[i].tolist() for i in centroids_indexes]
     centroids_output = np.array(mykmeanssp.fit(points.tolist(), centroids, k, max_iter, len(points), len(points[0])))
