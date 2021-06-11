@@ -20,9 +20,8 @@ typedef struct Cluster {
 
 /*** Function Declaration ***/
 static PyObject* c_kmeans(PyObject *self, PyObject *args);
-int get_num_coordinates(char* sinlge_line);
 double** init_points (int num_points, int num_coordinates);
-double* convert_line_to_point (double* point, char* line);
+int python_list_of_lists_to_2D_array (PyObject *python_list_of_lists, double **target_array);
 Cluster* make_cluster (const double* point, const int num_coordinates, const int index);
 Cluster** python_init_k_clusters (int k);
 void add_point_to_cluster (Cluster* cluster, const double* point, int num_coordinates);
@@ -45,11 +44,8 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
     int num_coordinates;
     PyObject *data_points;
     PyObject *initial_centroids;
-    Py_ssize_t list_size;
-    Py_ssize_t entry_size;
-    PyObject *point_item;
-    PyObject *coordinate_item;
     double **points;
+    double **initial_points_for_centroids;
     double *point;
     Cluster **clusters;
     int did_update;
@@ -72,47 +68,27 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
     if (!PyList_Check(data_points) || !PyList_Check(initial_centroids)) {
         return NULL;
     }
-
-    /*TODO: include input validation in main Python file*/
     
     /*Load points from PyObject into C format of 2D-array points*/
     points = init_points(num_points, num_coordinates);
 
-    list_size = PyList_Size(data_points); /*equivilant to len(_list) in Python*/
-    for (i=0; i<list_size; i++) { /*iterate over points*/
-        point_item = PyList_GetItem(data_points, i);
-        if (!PyList_Check(point_item)) {
-            return NULL;
-        }
-        entry_size = PyList_Size(point_item);
-        for (j=0; j<entry_size; j++) { /*iterate over coordinates of single point*/
-            coordinate_item = PyList_GetItem(point_item, j);
-            if (!PyFloat_Check(coordinate_item)) {
-                return NULL;
-            }
-            points[i][j] = PyFloat_AsDouble(coordinate_item);
-        }
+    if (python_list_of_lists_to_2D_array(data_points, points) != 0) {
+        return NULL;
     }
 
-    /*Load initial centroids from PyObject into C format of 2D-array  */
+    /*Load initial centroids from PyObject into C format of 2D-array -> into clusters  */
     clusters = python_init_k_clusters(k);
-    point = malloc(sizeof(double) * num_coordinates);
+    initial_points_for_centroids = init_points(k, num_coordinates);
 
-    for (i=0; i<k; i++) { /*iterate over initial indexes*/
-        point_item = PyList_GetItem(initial_centroids, i);
-        if (!PyList_Check(point_item)) {
-            return NULL;
-        }
-        entry_size = PyList_Size(point_item);
-        for (j=0; j<entry_size; j++) {
-            coordinate_item = PyList_GetItem(point_item, j);
-            if (!PyFloat_Check(coordinate_item)) {
-                return NULL;
-            }
-        }
-        point[i] = PyFloat_AsDouble(coordinate_item);
-        clusters[i] = make_cluster(point, num_coordinates, i);
+    if (python_list_of_lists_to_2D_array(initial_centroids, initial_points_for_centroids) != 0) {
+        return NULL;
     }
+
+    for (i=0; i<k; i++) {
+        clusters[i] = make_cluster(initial_points_for_centroids[i], num_coordinates, i);
+    }
+
+    free_points_memory(initial_points_for_centroids, k); /*we don't need this 2D array anymore since initial centroids are now stored in clusters*/
 
     /***Execute k-means algorithm***/
     did_update = 0;
@@ -163,24 +139,6 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
 /*** Function Implementation ***/
 /*******************************/
 
-
-int get_num_coordinates(char* sinlge_line) {
-    /*
-    Recieves pointer to char array containing the first line (=point),
-    Returns number of coordinates in each point (we can assume all points have same amount of coordinates).
-    */
-    int count_coordinates = 1;
-    char* pointer = sinlge_line;
-
-    while ((pointer = strchr(pointer, ',')) != NULL) {
-        pointer++;
-        count_coordinates++;
-    }
-    
-    return count_coordinates;
-}
-
-
 double** init_points (int num_points, int num_coordinates) {
      /*
     Recieves number of points and number of coordinates,
@@ -200,35 +158,36 @@ double** init_points (int num_points, int num_coordinates) {
     return points;
 }
 
+int python_list_of_lists_to_2D_array (PyObject *python_list_of_lists, double **target_array) {
+    Py_ssize_t list_size;
+    Py_ssize_t entry_size;
+    PyObject *point_item;
+    PyObject *coordinate_item;
+    int i;
+    int j;
 
-double* convert_line_to_point (double* point, char* line) {
-     /*
-    Recieves pointer to char array containing a line (=point) and pointer to initialized double-array (=point),
-    Returns the same point after filling it with double values from the line, using string.h functio strtok.
-    Reference: https://www.tutorialspoint.com/c_standard_library/c_function_strtok.htm
-    */
-    char* tokens;
-    int index;
-
-    index = 0;
-
-    tokens = strtok(line, ",");
-
-    while (tokens != NULL) {
-        point[index] = atof(tokens);
-        tokens = strtok(NULL, ",");
-        index++;
+    list_size = PyList_Size(python_list_of_lists); /*equivilant to len(_list) in Python*/
+    for (i=0; i<list_size; i++) { /*iterate over points*/
+        point_item = PyList_GetItem(python_list_of_lists, i);
+        if (!PyList_Check(point_item)) {
+            return 1;
+        }
+        entry_size = PyList_Size(point_item);
+        for (j=0; j<entry_size; j++) { /*iterate over coordinates of single point*/
+            coordinate_item = PyList_GetItem(point_item, j);
+            if (!PyFloat_Check(coordinate_item)) {
+                return 1;
+            }
+            target_array[i][j] = PyFloat_AsDouble(coordinate_item);
+        }
     }
-
-    return point;
+    return 0;
 }
-
-
 
 Cluster* make_cluster (const double* point, const int num_coordinates,const int index) {
     /*
     Recieves a point, number of coordinates and a specific cluster index,
-    Returns new Cluster with sufficient memory space to store both the current centroid and the previous centroid.
+    Returns new Cluster with sufficient memory space to store both the current centroid and the previous centroid, holding the current centroid which is the input point.
     */
     int i;
     Cluster* cluster;
@@ -261,7 +220,6 @@ Cluster** python_init_k_clusters (int k) {
     Returns new 2D array of Clusters with sufficient memory, initialized with the first k points.
     */
     Cluster **clusters;
-    int i;
 
     clusters = malloc(sizeof(Cluster*) * k);
     assert (clusters != NULL);
