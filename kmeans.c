@@ -24,7 +24,7 @@ int get_num_coordinates(char* sinlge_line);
 double** init_points (int num_points, int num_coordinates);
 double* convert_line_to_point (double* point, char* line);
 Cluster* make_cluster (const double* point, const int num_coordinates, const int index);
-Cluster** python_init_k_clusters (double **points, int k, int num_coordinates, long *init_indexes_array );
+Cluster** python_init_k_clusters (int k);
 void add_point_to_cluster (Cluster* cluster, const double* point, int num_coordinates);
 void find_minimum_distance (Cluster** clusters, double* point, int k, int num_coordinates);
 double update_cluster_centroids_and_sum (Cluster* cluster, int num_coordinates);
@@ -44,8 +44,7 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
     int num_points;
     int num_coordinates;
     PyObject *data_points;
-    PyObject *initial_indexes;
-    PyObject *index_item;
+    PyObject *initial_centroids;
     Py_ssize_t list_size;
     Py_ssize_t entry_size;
     PyObject *point_item;
@@ -56,7 +55,6 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
     int did_update;
     int i;
     int j;
-    long *init_indexes_array;
     PyObject *centroids_output_list;
     Py_ssize_t output_list_len;
     PyObject *single_centroid_list;
@@ -65,12 +63,13 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
 
 
     /* Parse arguments from Python */
-    if((!PyArg_ParseTuple(args, "OOiiii", &data_points, &initial_indexes, &k, &max_iter, &num_points, &num_coordinates))) {
+    if((!PyArg_ParseTuple(args, "OOiiii", &data_points, &initial_centroids, &k, &max_iter, &num_points, &num_coordinates))) {
         return NULL; /*In the CPython API, Null is never a valid value for a PyObject* - so it signals an error*/
     }
 
+
     /*Verify that data_points & initial_indexes are python lists*/
-    if (!PyList_Check(data_points) || !PyList_Check(initial_indexes)) {
+    if (!PyList_Check(data_points) || !PyList_Check(initial_centroids)) {
         return NULL;
     }
 
@@ -90,25 +89,32 @@ static PyObject* c_kmeans(PyObject *self, PyObject *args) {
             coordinate_item = PyList_GetItem(point_item, j);
             if (!PyFloat_Check(coordinate_item)) {
                 return NULL;
-            };
+            }
             points[i][j] = PyFloat_AsDouble(coordinate_item);
         }
     }
 
-    /*Load initial indexes from PyObject into C format of array */
-    init_indexes_array = calloc(k, sizeof(long));
-    assert(init_indexes_array != NULL);
+    /*Load initial centroids from PyObject into C format of 2D-array  */
+    clusters = python_init_k_clusters(k);
+    point = malloc(sizeof(double) * num_coordinates);
 
     for (i=0; i<k; i++) { /*iterate over initial indexes*/
-        index_item = PyList_GetItem(initial_indexes, i);
-        if (!PyLong_Check(index_item)) {
+        point_item = PyList_GetItem(initial_centroids, i);
+        if (!PyList_Check(point_item)) {
             return NULL;
         }
-        init_indexes_array[i] = PyLong_AsLong(index_item);
+        entry_size = PyList_Size(point_item);
+        for (j=0; j<entry_size; j++) {
+            coordinate_item = PyList_GetItem(point_item, j);
+            if (!PyFloat_Check(coordinate_item)) {
+                return NULL;
+            }
+        }
+        point[i] = PyFloat_AsDouble(coordinate_item);
+        clusters[i] = make_cluster(point, num_coordinates, i);
     }
 
     /***Execute k-means algorithm***/
-    clusters = python_init_k_clusters(points, k, num_coordinates, init_indexes_array);
     did_update = 0;
 
     for (i=0; i<max_iter; i++) {
@@ -249,22 +255,16 @@ Cluster* make_cluster (const double* point, const int num_coordinates,const int 
     return cluster;
 }
 
-Cluster** python_init_k_clusters (double **points, int k, int num_coordinates, long *init_indexes_array ) {
+Cluster** python_init_k_clusters (int k) {
     /*
-    Recieves pointer to 2D array of points, k, number of coordinates and array of initial indexes,
+    Recieves pointer to 2D array of points, k, number of coordinates and 2D array of initial indexes,
     Returns new 2D array of Clusters with sufficient memory, initialized with the first k points.
     */
     Cluster **clusters;
     int i;
-    long initial_index;
 
     clusters = malloc(sizeof(Cluster*) * k);
     assert (clusters != NULL);
-
-    for (i=0; i<k; i++) {
-        initial_index = init_indexes_array[i];
-        clusters[i] = make_cluster(points[initial_index], num_coordinates, i);
-    }
 
     return clusters;
 }

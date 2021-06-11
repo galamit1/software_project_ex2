@@ -20,8 +20,9 @@ def get_points(file_1, file_2):
                      + "b.'" + "',b.'".join(map(str, range(1, len(data_2.columns)))) + "'"
     return np.array(pandasql.sqldf(JOIN_TABLES_QUERY.format(select_columns), locals()).values)
 
-
+#TODO: instructions say we should do np.random.seed(0) - is it OK we skipped this?
 def calc_centroids_indexes(points, k):
+    np.random.seed(0)
     centroids_indexes = np.random.choice(points.shape[0], 1)
     for z in range(1, k):
         distances = np.array([])
