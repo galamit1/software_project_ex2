@@ -7,10 +7,11 @@ import pandasql
 
 POINTS_SEPARATOR = '\n'
 COORDINATES_SEPARATOR = ','
-JOIN_TABLES_QUERY = """select {}
-                    from data_1 as a
-                    inner join data_2 as b
-                    on a.'0'=b.'0' """
+JOIN_TABLES_QUERY = """SELECT {}
+                    FROM data_1 as a
+                    INNER JOIN data_2 as b
+                    ON a.'0'=b.'0' 
+                    ORDER BY a.'0'"""
 
 
 def get_points(file_1, file_2):
@@ -20,7 +21,7 @@ def get_points(file_1, file_2):
                      + "b.'" + "',b.'".join(map(str, range(1, len(data_2.columns)))) + "'"
     return np.array(pandasql.sqldf(JOIN_TABLES_QUERY.format(select_columns), locals()).values)
 
-#TODO: instructions say we should do np.random.seed(0) - is it OK we skipped this?
+
 def calc_centroids_indexes(points, k):
     np.random.seed(0)
     centroids_indexes = np.random.choice(points.shape[0], 1)
@@ -36,11 +37,17 @@ def calc_centroids_indexes(points, k):
 
 
 def main():
-    assert len(sys.argv) == 5
+    assert len(sys.argv) in [4, 5]
     k = int(sys.argv[1])
-    max_iter = int(sys.argv[2])
-    file_1 = sys.argv[3]
-    file_2 = sys.argv[4]
+    if len(sys.argv) == 4:
+        max_iter = 300
+        file_1 = sys.argv[2]
+        file_2 = sys.argv[3]
+
+    if len(sys.argv) == 5:
+        max_iter = int(sys.argv[2])
+        file_1 = sys.argv[3]
+        file_2 = sys.argv[4]
 
     points = get_points(file_1, file_2)
     assert k < points.shape[0]
