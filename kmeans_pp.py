@@ -3,23 +3,17 @@ import sys
 import mykmeanssp
 import numpy as np
 import pandas as pd
-from pandasql import sqldf
+
 
 POINTS_SEPARATOR = '\n'
 COORDINATES_SEPARATOR = ','
-JOIN_TABLES_QUERY = """SELECT {}
-                    FROM data_1 as a
-                    INNER JOIN data_2 as b
-                    ON a.'0'=b.'0' 
-                    ORDER BY a.'0'"""
 
 
 def get_points(file_1, file_2):
     data_1 = pd.read_csv(file_1, header=None)
     data_2 = pd.read_csv(file_2, header=None)
-    select_columns = "a.'" + "',a.'".join(map(str, range(1, len(data_1.columns)))) + "'," \
-                     + "b.'" + "',b.'".join(map(str, range(1, len(data_2.columns)))) + "'"
-    return np.array(sqldf(JOIN_TABLES_QUERY.format(select_columns), locals()).values)
+    points = pd.merge(data_1, data_2, how='inner', on=0, sort=True)
+    return np.array(points[points.columns[1:]])
 
 
 def calc_centroids_indexes(points, k):
