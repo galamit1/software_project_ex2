@@ -18,15 +18,15 @@ def get_points(file_1, file_2):
 
 def calc_centroids_indexes(points, k):
     np.random.seed(0)
-    point_size = points.shape[1]
-    centroids_indexes = np.random.choice(points.shape[0], 1)
+    points_num = points.shape[0]
+    centroids_indexes = np.random.choice(points_num, 1)
     centroids = points[[centroids_indexes[0]]]
+    distances = np.ones(points_num) * 10000
     for z in range(1, k):
-        distances = np.array([])
-        for point in points:
-            distances = np.append(distances, np.min(np.sum(np.power(np.subtract(np.multiply(point, np.ones((z, point_size))), centroids), 2), axis=1)))
+        for i in range(points_num):
+            distances[i] = min(distances[i], np.sum(np.power(np.subtract(points[i], centroids[-1]), 2)))
         probs = np.divide(distances, distances.sum())
-        centroids_indexes = np.append(centroids_indexes, np.random.choice(points.shape[0], 1, p=probs), axis=0)
+        centroids_indexes = np.append(centroids_indexes, np.random.choice(points_num, 1, p=probs), axis=0)
         centroids = np.append(centroids, points[[centroids_indexes[-1]]], axis=0)
     return centroids_indexes, centroids
 
