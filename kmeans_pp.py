@@ -21,7 +21,7 @@ def calc_centroids_indexes(points, k):
     points_num = points.shape[0]
     centroids_indexes = np.random.choice(points_num, 1)
     centroids = points[[centroids_indexes[0]]]
-    distances = np.ones(points_num) * 10000
+    distances = np.ones(points_num) * float('inf')
     for z in range(1, k):
         for i in range(points_num):
             distances[i] = min(distances[i], np.sum(np.power(np.subtract(points[i], centroids[-1]), 2)))
@@ -46,6 +46,8 @@ def main():
 
     points = get_points(file_1, file_2)
     assert k < points.shape[0]
+    if k == 0:
+        return
     centroids_indexes, centroids = calc_centroids_indexes(points, k)
     print(COORDINATES_SEPARATOR.join([str(c) for c in centroids_indexes]))
     centroids_output = np.array(mykmeanssp.fit(points.tolist(), centroids.tolist(), k, max_iter, len(points), len(points[0])))
